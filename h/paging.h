@@ -48,6 +48,7 @@ typedef struct{
   int bs_vpno;				/* starting virtual page number */
   int bs_npages;			/* number of pages in the store */
   int bs_sem;				/* semaphore mechanism ?	*/
+  int bs_private_heap; /* will be set to 1 if the backing store is used as a private heap */
 } bs_map_t;
 
 typedef struct{
@@ -57,11 +58,22 @@ typedef struct{
   int fr_refcnt;			/* reference count		*/
   int fr_type;				/* FR_DIR, FR_TBL, FR_PAGE	*/
   int fr_dirty;
-
+  void *cookie;
+  unsigned long int fr_loadtime;
+  int next_frame;
 }fr_map_t;
+
+
+typedef struct{
+  int frm_id;
+  int next_frame;
+}fifo_node;
+
 
 extern bs_map_t bsm_tab[];
 extern fr_map_t frm_tab[];
+extern fifo_node frame_fifo[];
+
 /* Prototypes for required API calls */
 SYSCALL xmmap(int, bsd_t, int);
 SYSCALL xunmap(int);
@@ -72,6 +84,20 @@ int get_bs(bsd_t, unsigned int);
 SYSCALL release_bs(bsd_t);
 SYSCALL read_bs(char *, bsd_t, int);
 SYSCALL write_bs(char *, bsd_t, int);
+
+void insert_frm_fifo(int);
+
+int remove_frm_fifo();
+
+void evict_frame(int);
+
+int get_frm_LRU();
+
+void update_frms_LRU();
+
+void update_frm_fifo();
+
+void init_frame_fifo();
 
 #define NBPG		4096	/* number of bytes per page	*/
 #define FRAME0		1024	/* zero-th frame		*/
@@ -88,7 +114,13 @@ SYSCALL write_bs(char *, bsd_t, int);
 #define FR_DIR		2
 
 #define SC 3
-#define FIFO 4
+#define AGING 4
 
 #define BACKING_STORE_BASE	0x00800000
 #define BACKING_STORE_UNIT_SIZE 0x00100000
+
+#define NSTORES 8
+
+extern int fifo_head;
+
+unsigned long int timeCount;

@@ -28,8 +28,48 @@ SYSCALL vcreate(procaddr,ssize,hsize,priority,name,nargs,args)
 	long	args;			/* arguments (treated like an	*/
 					/* array in the code)		*/
 {
-	kprintf("To be implemented!\n");
-	return OK;
+//	kprintf("To be implemented!\n");
+	if(hsize < 0 || hsize > 256){
+		return SYSERR;
+	}
+
+	STATWORD ps;
+	disable(ps);
+
+	int new_bs_id;
+
+	int ret_val = get_bsm(&new_bs_id);
+	
+	if(ret_val == SYSERR){
+		restore(ps);
+		return SYSERR;
+	}
+
+	int pid = create(procaddr, ssize, priority, name, nargs, args);
+
+	if(pid == SYSERR){
+		restore(ps);
+		return SYSERR;
+	}
+
+	struct mblock *bs_base;
+	
+	bsm_map(pid, 4096, new_bs_id, hsize);
+
+	struct pentry *cur_proc = &proctab[pid];
+	cur_proc->store = new_bs_id;
+	cur_proc->vhpno = 4096;
+	cur_proc->vhpnpages = hsize;
+	cur_proc->vmemlist->mnext = 4096 * NBPG; // first address after 16 MB virtual adress.
+	cur_proc->vmemlist->mlen = hsize * 4096; // no of pages in heap * size of each page.
+
+	bs_base = BACKING_STORE_BASE + (new_bs_id * BACKING_STORE_UNIT_SIZE);
+	bs_base->mlen = hsize * NBPG;
+	bs_base->mnext = NULL;
+
+
+	restore(ps);
+	return pid;
 }
 
 /*------------------------------------------------------------------------
