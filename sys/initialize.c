@@ -18,12 +18,6 @@
 #define	HOLEEND		((1024 + HOLESIZE) * 1024)  
 /* Extra 600 for bootp loading, and monitor */
 
-bs_map_t bsm_tab[10];	
-fr_map_t frm_tab[NFRAMES+1];
-fifo_node frame_fifo[NFRAMES+1];
-int fifo_head = -1;
-extern void allocate_pd(int proc_id);
-
 extern	int	main();	/* address of user's main prog	*/
 
 extern	int	start();
@@ -141,7 +135,6 @@ sysinit()
 	SYSCALL pfintr();
 
 	
-	set_evec(14, (u_long)pfintr);
 
 	numproc = 0;			/* initialize system variables */
 	nextproc = NPROC-1;
@@ -217,43 +210,7 @@ sysinit()
 
 	rdytail = 1 + (rdyhead=newqueue());/* initialize ready list */
 
-	init_bsm();
-	init_frm();
-	
 
-	int f_num = 0;
-	pt_t *pt_entry;
-	pd_t *pd_entry;
-	for(i = 0;i<4;i++){
-		//kprintf("initialize.c - before calling get_frm\n");
-		get_frm(&f_num);
-		//kprintf("initialize.c - after calling get_frm : %d\n", f_num);
-		frm_tab[f_num].fr_status = FRM_MAPPED;
-		frm_tab[f_num].fr_type = FR_TBL;
-		frm_tab[f_num].fr_pid = NULLPROC;
-
-		pt_entry = (FRAME0 + f_num) * NBPG;
-		int j = 0;
-		for(;j < 1024;j++){
-			//kprintf("TEST THIS LOC %d %d\n",i,j);
-			pt_entry->pt_pres = 1;
-			pt_entry->pt_write = 1;
-			pt_entry->pt_user = 0;
-			pt_entry->pt_pwt = 0;
-			pt_entry->pt_pcd = 0;
-			pt_entry->pt_acc = 0;
-			pt_entry->pt_dirty = 0;
-			pt_entry->pt_mbz = 0;
-			pt_entry->pt_global = 1;
-			pt_entry->pt_avail = 0;
-			pt_entry->pt_base = i*FRAME0+j;	
-			pt_entry++;
-		}
-
-	}
-		allocate_pd(NULLPROC);
-		write_cr3(proctab[NULLPROC].pdbr);
-		enable_paging();
 	return(OK);
 }
 

@@ -10,7 +10,6 @@
 #include <paging.h>
 
 LOCAL int newpid();
-void allocate_pd(int proc_id);
 
 /*------------------------------------------------------------------------
  *  create  -  create a process to start running a procedure
@@ -97,8 +96,6 @@ SYSCALL create(procaddr,ssize,priority,name,nargs,args)
 	*--saddr = 0;		/* %edi */
 	*pushsp = pptr->pesp = (unsigned long)saddr;
 
-	allocate_pd(pid);
-
 	restore(ps);
 
 	return(pid);
@@ -120,30 +117,4 @@ LOCAL int newpid()
 			return(pid);
 	}
 	return(SYSERR);
-}
-
-
-void allocate_pd(int proc_id){
-	int f_num = 0, i = 0;
-	pd_t *pd_entry;
-
-//	kprintf("create.c - before calling get_frm : proc id = %d\n", proc_id);
-	get_frm(&f_num);
-//	kprintf("create.c - after calling get_frm : %d \n", f_num);
-
-	proctab[proc_id].pdbr = (FRAME0 + f_num) * NBPG;
-	
-	frm_tab[f_num].fr_status = FRM_MAPPED;
-	frm_tab[f_num].fr_type = FR_DIR;
-	frm_tab[f_num].fr_pid = proc_id;
-
-
-	pd_entry = (FRAME0+ f_num)*NBPG;
-	for(; i < 1024; i++){
-		pd_entry[i].pd_write = 1;
-		if(i<4){
-			pd_entry[i].pd_pres = 1;
-			pd_entry[i].pd_base = (FRAME0+i);
-		}
-	} 
 }

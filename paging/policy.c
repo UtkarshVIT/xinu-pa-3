@@ -13,14 +13,9 @@ extern int page_replace_policy;
 SYSCALL srpolicy(int policy)
 {
   /* sanity check ! */
-  STATWORD ps;
-  disable(ps);
-  if(policy != SC && policy != AGING){
-    restore(ps);
-    return SYSERR;
-  }
-  page_replace_policy = policy;
-  restore(ps);
+
+  kprintf("To be implemented!\n");
+
   return OK;
 }
 

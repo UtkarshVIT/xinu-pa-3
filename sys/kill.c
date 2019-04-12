@@ -56,9 +56,6 @@ SYSCALL kill(int pid)
 						/* fall through	*/
 	default:	pptr->pstate = PRFREE;
 	}
-
-	release_bs(proctab[currpid].store);
-	evict_frame(currpid);
 	restore(ps);
 	return(OK);
 }
