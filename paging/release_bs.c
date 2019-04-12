@@ -5,13 +5,11 @@
 
 SYSCALL release_bs(bsd_t bs_id) {
 
-  /* release the backing store with ID bs_id */
-//    kprintf("To be implemented!\n");
-
-    STATWORD ps;
-    disable(ps);
-    clear_bsm(bs_id);
-    restore(ps);
-    return OK;
+	if (check_BS_ID(bs_id)) {
+		return SYSERR;
+	}
+	free_bsm(bs_id);
+	write2CR3(currpid);
+	return OK;
 }
 

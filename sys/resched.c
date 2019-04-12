@@ -4,6 +4,7 @@
 #include <kernel.h>
 #include <proc.h>
 #include <q.h>
+#include <paging.h>
 
 unsigned long currSP;	/* REAL sp of current process */
 
@@ -24,7 +25,7 @@ int	resched()
 
 	disable(PS);
 	/* no switch needed if current process priority higher than next*/
-
+//	kprintf("In resched\n");
 	if ( ( (optr= &proctab[currpid])->pstate == PRCURR) &&
 	   (lastkey(rdytail)<optr->pprio)) {
 		restore(PS);
@@ -82,7 +83,11 @@ int	resched()
 #ifdef	DEBUG
 	PrintSaved(nptr);
 #endif
-	
+	//
+//	kprintf("before calling write2cr3 %lu\n",(unsigned long)proctab[currpid].pdbr);
+	write_cr3((unsigned long)proctab[currpid].pdbr);
+	//
+//	kprintf("Context Switch for process %d\n", currpid);
 	ctxsw(&optr->pesp, optr->pirmask, &nptr->pesp, nptr->pirmask);
 
 #ifdef	DEBUG

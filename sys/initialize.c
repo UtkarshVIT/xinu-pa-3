@@ -18,42 +18,38 @@
 #define	HOLEEND		((1024 + HOLESIZE) * 1024)  
 /* Extra 600 for bootp loading, and monitor */
 
-bs_map_t bsm_tab[10];	
-fr_map_t frm_tab[NFRAMES+1];
-fifo_node frame_fifo[NFRAMES+1];
-int fifo_head = -1;
-extern void allocate_pd(int proc_id);
+extern int main(); /* address of user's main prog	*/
+extern int start();
+LOCAL sysinit();
 
-extern	int	main();	/* address of user's main prog	*/
-
-extern	int	start();
-
-LOCAL		sysinit();
+FifoQueue head_FIFO;
+int n_FIFOPages;
+int LRU_Count;
 
 /* Declarations of major kernel variables */
-struct	pentry	proctab[NPROC]; /* process table			*/
-int	nextproc;		/* next process slot to use in create	*/
-struct	sentry	semaph[NSEM];	/* semaphore table			*/
-int	nextsem;		/* next sempahore slot to use in screate*/
-struct	qent	q[NQENT];	/* q table (see queue.c)		*/
-int	nextqueue;		/* next slot in q structure to use	*/
-char	*maxaddr;		/* max memory address (set by sizmem)	*/
-struct	mblock	memlist;	/* list of free memory blocks		*/
+struct pentry proctab[NPROC]; /* process table			*/
+int nextproc; /* next process slot to use in create	*/
+struct sentry semaph[NSEM]; /* semaphore table			*/
+int nextsem; /* next sempahore slot to use in screate*/
+struct qent q[NQENT]; /* q table (see queue.c)		*/
+int nextqueue; /* next slot in q structure to use	*/
+char *maxaddr; /* max memory address (set by sizmem)	*/
+struct mblock memlist; /* list of free memory blocks		*/
 #ifdef	Ntty
-struct  tty     tty[Ntty];	/* SLU buffers and mode control		*/
+struct tty tty[Ntty]; /* SLU buffers and mode control		*/
 #endif
 
 /* active system status */
-int	numproc;		/* number of live user processes	*/
-int	currpid;		/* id of currently running process	*/
-int	reboot = 0;		/* non-zero after first boot		*/
+int numproc; /* number of live user processes	*/
+int currpid; /* id of currently running process	*/
+int reboot = 0; /* non-zero after first boot		*/
 
-int	rdyhead,rdytail;	/* head/tail of ready list (q indicies)	*/
-char 	vers[80];
-int	console_dev;		/* the console device			*/
+int rdyhead, rdytail; /* head/tail of ready list (q indicies)	*/
+char vers[80];
+int console_dev; /* the console device			*/
 
 /*  added for the demand paging */
-int page_replace_policy = SC;
+int page_replace_policy = FIFO;
 
 /************************************************************************/
 /***				NOTE:				      ***/
@@ -73,18 +69,18 @@ int page_replace_policy = SC;
  *  nulluser  -- initialize system and become the null process (id==0)
  *------------------------------------------------------------------------
  */
-nulluser()				/* babysit CPU when no one is home */
+nulluser() /* babysit CPU when no one is home */
 {
-        int userpid;
+	int userpid;
 
-	console_dev = SERIAL0;		/* set console to COM0 */
+	console_dev = SERIAL0; /* set console to COM0 */
 
 	initevec();
 
-	kprintf("system running up!\n");
+	kprintf("\n**NEW! NEW! system running up!\n");
 	sysinit();
 
-	enable();		/* enable interrupts */
+	enable(); /* enable interrupts */
 
 	sprintf(vers, "PC Xinu %s", VERSION);
 	kprintf("\n\n%s\n", vers);
@@ -93,16 +89,13 @@ nulluser()				/* babysit CPU when no one is home */
 	else
 		kprintf("   (reboot %d)\n", reboot);
 
-
-	kprintf("%d bytes real mem\n",
-		(unsigned long) maxaddr+1);
+	kprintf("%d bytes real mem\n", (unsigned long) maxaddr + 1);
 #ifdef DETAIL	
 	kprintf("    %d", (unsigned long) 0);
 	kprintf(" to %d\n", (unsigned long) (maxaddr) );
 #endif	
 
-	kprintf("%d bytes Xinu code\n",
-		(unsigned long) ((unsigned long) &end - (unsigned long) start));
+	kprintf("%d bytes Xinu code\n", (unsigned long) ((unsigned long) &end - (unsigned long) start));
 #ifdef DETAIL	
 	kprintf("    %d", (unsigned long) start);
 	kprintf(" to %d\n", (unsigned long) &end );
@@ -110,16 +103,16 @@ nulluser()				/* babysit CPU when no one is home */
 
 #ifdef DETAIL	
 	kprintf("%d bytes user stack/heap space\n",
-		(unsigned long) ((unsigned long) maxaddr - (unsigned long) &end));
+			(unsigned long) ((unsigned long) maxaddr - (unsigned long) &end));
 	kprintf("    %d", (unsigned long) &end);
 	kprintf(" to %d\n", (unsigned long) maxaddr);
 #endif	
-	
-	kprintf("clock %sabled\n", clkruns == 1?"en":"dis");
 
+	kprintf("clock %sabled\n", clkruns == 1 ? "en" : "dis");
 
 	/* create a process to execute the user's main program */
-	userpid = create(main,INITSTK,INITPRIO,INITNAME,INITARGS);
+	kprintf("Calling create to start main\n");
+	userpid = create(main, INITSTK, INITPRIO, INITNAME, INITARGS);
 	resume(userpid);
 
 	while (TRUE)
@@ -130,148 +123,145 @@ nulluser()				/* babysit CPU when no one is home */
  *  sysinit  --  initialize all Xinu data structeres and devices
  *------------------------------------------------------------------------
  */
-LOCAL
-sysinit()
-{
-	static	long	currsp;
-	int	i,j;
-	struct	pentry	*pptr;
-	struct	sentry	*sptr;
-	struct	mblock	*mptr;
+LOCAL sysinit() {
+	static long currsp;
+	int i, j;
+	struct pentry *pptr;
+	struct sentry *sptr;
+	struct mblock *mptr;
 	SYSCALL pfintr();
 
-	
-	set_evec(14, (u_long)pfintr);
-
-	numproc = 0;			/* initialize system variables */
-	nextproc = NPROC-1;
-	nextsem = NSEM-1;
-	nextqueue = NPROC;		/* q[0..NPROC-1] are processes */
+	numproc = 0; /* initialize system variables */
+	nextproc = NPROC - 1;
+	nextsem = NSEM - 1;
+	nextqueue = NPROC; /* q[0..NPROC-1] are processes */
 
 	/* initialize free memory list */
 	/* PC version has to pre-allocate 640K-1024K "hole" */
-	if (maxaddr+1 > HOLESTART) {
+	if (maxaddr + 1 > HOLESTART) {
 		memlist.mnext = mptr = (struct mblock *) roundmb(&end);
-		mptr->mnext = (struct mblock *)HOLEEND;
-		mptr->mlen = (int) truncew(((unsigned) HOLESTART -
-	     		 (unsigned)&end));
-        mptr->mlen -= 4;
+		mptr->mnext = (struct mblock *) HOLEEND;
+		mptr->mlen = (int) truncew(((unsigned) HOLESTART - (unsigned) &end));
+		mptr->mlen -= 4;
 
 		mptr = (struct mblock *) HOLEEND;
 		mptr->mnext = 0;
-		mptr->mlen = (int) truncew((unsigned)maxaddr - HOLEEND -
-	      		NULLSTK);
-/*
-		mptr->mlen = (int) truncew((unsigned)maxaddr - (4096 - 1024 ) *  4096 - HOLEEND - NULLSTK);
-*/
+		mptr->mlen = (int) truncew((unsigned) maxaddr - HOLEEND -
+		NULLSTK);
+		/*
+		 mptr->mlen = (int) truncew((unsigned)maxaddr - (4096 - 1024 ) *  4096 - HOLEEND - NULLSTK);
+		 */
 	} else {
 		/* initialize free memory list */
 		memlist.mnext = mptr = (struct mblock *) roundmb(&end);
 		mptr->mnext = 0;
-		mptr->mlen = (int) truncew((unsigned)maxaddr - (int)&end -
-			NULLSTK);
+		mptr->mlen = (int) truncew((unsigned) maxaddr - (int) &end -
+		NULLSTK);
 	}
-	
 
-	for (i=0 ; i<NPROC ; i++)	/* initialize process table */
+	for (i = 0; i < NPROC; i++) /* initialize process table */
 		proctab[i].pstate = PRFREE;
 
-
 #ifdef	MEMMARK
-	_mkinit();			/* initialize memory marking */
+	_mkinit(); /* initialize memory marking */
 #endif
 
 #ifdef	RTCLOCK
-	clkinit();			/* initialize r.t.clock	*/
+	clkinit(); /* initialize r.t.clock	*/
 #endif
 
-	mon_init();     /* init monitor */
+	mon_init(); /* init monitor */
 
 #ifdef NDEVS
-	for (i=0 ; i<NDEVS ; i++ ) {	    
-	    init_dev(i);
+	for (i=0; i<NDEVS; i++ ) {
+		init_dev(i);
 	}
 #endif
 
-	pptr = &proctab[NULLPROC];	/* initialize null process entry */
+	/*
+	 *
+	 */
+//	kprintf("\nd: Initializing Demand Paging Data Structures\n");
+	//Initialize all necessary data structures
+	LRU_Count = 0;
+	init_bsm();
+	init_frm();
+
+	//Install the page fault interrup service routine
+	set_evec(14, pfintr);
+	//Create the page tables which will map pages 0 through 4095 to the physical 16 MB. These will be called the global page tables.
+	initializeGlobalPageTable();
+	//Allocate and initialize a page directory for NULL Process
+	create_PageDirectory(NULLPROC);
+	//set PDBR CR3 Register to the page directory of NULL Process.
+	write2CR3(NULLPROC);
+//	kprintf("wrote to cr3 while initializing\n");
+	//Enable Paging
+//	kprintf("Enable paging\n");
+	enable_paging();
+
+	/*
+	 *
+	 */
+	pptr = &proctab[NULLPROC]; /* initialize null process entry */
 	pptr->pstate = PRCURR;
-	for (j=0; j<7; j++)
+	for (j = 0; j < 7; j++)
 		pptr->pname[j] = "prnull"[j];
-	pptr->plimit = (WORD)(maxaddr + 1) - NULLSTK;
+	pptr->plimit = (WORD) (maxaddr + 1) - NULLSTK;
 	pptr->pbase = (WORD) maxaddr - 3;
-/*
-	pptr->plimit = (WORD)(maxaddr + 1) - NULLSTK - (4096 - 1024 )*4096;
-	pptr->pbase = (WORD) maxaddr - 3 - (4096-1024)*4096;
-*/
-	pptr->pesp = pptr->pbase-4;	/* for stkchk; rewritten before used */
-	*( (int *)pptr->pbase ) = MAGIC;
+	/*
+	 pptr->plimit = (WORD)(maxaddr + 1) - NULLSTK - (4096 - 1024 )*4096;
+	 pptr->pbase = (WORD) maxaddr - 3 - (4096-1024)*4096;
+	 */
+	pptr->pesp = pptr->pbase - 4; /* for stkchk; rewritten before used */
+	*((int *) pptr->pbase) = MAGIC;
 	pptr->paddr = (WORD) nulluser;
 	pptr->pargs = 0;
 	pptr->pprio = 0;
 	currpid = NULLPROC;
 
-	for (i=0 ; i<NSEM ; i++) {	/* initialize semaphores */
+	//Initializing with dummy demand paging parameters in NULL Process Entry
+	head_FIFO.frameID = -1;
+	head_FIFO.nextFrame = NULL;
+	n_FIFOPages = 0;
+
+//	kprintf("\nd: Initializing Demand Paging Process Entry Parameters\n");
+	pptr->store = -1;
+	pptr->vhpno = -1;
+	pptr->vhpnpages = -1;
+	pptr->vmemlist = NULL;
+	for (i = 0; i < NUM_BACKING_STORES; i++) {
+		pptr->backStoreMap[i].bs_isPriv = 0;
+		pptr->backStoreMap[i].bs_npages = 0;
+		pptr->backStoreMap[i].bs_pid = -1;
+		pptr->backStoreMap[i].bs_refCount = 0;
+		pptr->backStoreMap[i].bs_sem = -1;
+		pptr->backStoreMap[i].bs_status = UNMAPPED;
+		pptr->backStoreMap[i].bs_vpno = -1;
+	}
+	//
+
+	for (i = 0; i < NSEM; i++) { /* initialize semaphores */
 		(sptr = &semaph[i])->sstate = SFREE;
 		sptr->sqtail = 1 + (sptr->sqhead = newqueue());
 	}
 
-	rdytail = 1 + (rdyhead=newqueue());/* initialize ready list */
-
-	init_bsm();
-	init_frm();
-	
-
-	int f_num = 0;
-	pt_t *pt_entry;
-	pd_t *pd_entry;
-	for(i = 0;i<4;i++){
-		//kprintf("initialize.c - before calling get_frm\n");
-		get_frm(&f_num);
-		//kprintf("initialize.c - after calling get_frm : %d\n", f_num);
-		frm_tab[f_num].fr_status = FRM_MAPPED;
-		frm_tab[f_num].fr_type = FR_TBL;
-		frm_tab[f_num].fr_pid = NULLPROC;
-
-		pt_entry = (FRAME0 + f_num) * NBPG;
-		int j = 0;
-		for(;j < 1024;j++){
-			//kprintf("TEST THIS LOC %d %d\n",i,j);
-			pt_entry->pt_pres = 1;
-			pt_entry->pt_write = 1;
-			pt_entry->pt_user = 0;
-			pt_entry->pt_pwt = 0;
-			pt_entry->pt_pcd = 0;
-			pt_entry->pt_acc = 0;
-			pt_entry->pt_dirty = 0;
-			pt_entry->pt_mbz = 0;
-			pt_entry->pt_global = 1;
-			pt_entry->pt_avail = 0;
-			pt_entry->pt_base = i*FRAME0+j;	
-			pt_entry++;
-		}
-
-	}
-		allocate_pd(NULLPROC);
-		write_cr3(proctab[NULLPROC].pdbr);
-		enable_paging();
-	return(OK);
+	rdytail = 1 + (rdyhead = newqueue());/* initialize ready list */
+	return (OK);
 }
 
 stop(s)
-char	*s;
-{
+	char *s; {
 	kprintf("%s\n", s);
 	kprintf("looping... press reset\n");
-	while(1)
+	while (1)
 		/* empty */;
 }
 
 delay(n)
-int	n;
-{
+	int n; {
 	DELAY(n);
 }
-
 
 #define	NBPG	4096
 
@@ -279,15 +269,14 @@ int	n;
  * sizmem - return memory size (in pages)
  *------------------------------------------------------------------------
  */
-long sizmem()
-{
-	unsigned char	*ptr, *start, stmp, tmp;
-	int		npages;
+long sizmem() {
+	unsigned char *ptr, *start, stmp, tmp;
+	int npages;
 
 	/* at least now its hacked to return
-	   the right value for the Xinu lab backends (16 MB) */
+	 the right value for the Xinu lab backends (16 MB) */
 
-	return 4096; 
+	return 4096;
 
 	start = ptr = 0;
 	npages = 0;
@@ -300,10 +289,11 @@ long sizmem()
 		*ptr = tmp;
 		++npages;
 		ptr += NBPG;
-		if ((int)ptr == HOLESTART) {	/* skip I/O pages */
-			npages += (1024-640)/4;
-			ptr = (unsigned char *)HOLEEND;
+		if ((int) ptr == HOLESTART) { /* skip I/O pages */
+			npages += (1024 - 640) / 4;
+			ptr = (unsigned char *) HOLEEND;
 		}
 	}
 	return npages;
 }
+

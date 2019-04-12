@@ -1,5 +1,8 @@
 /* paging.h */
 
+#ifndef _PAGING_H_
+#define _PAGING_H_
+
 typedef unsigned int	 bsd_t;
 
 /* Structure for a page directory entry */
@@ -48,7 +51,9 @@ typedef struct{
   int bs_vpno;				/* starting virtual page number */
   int bs_npages;			/* number of pages in the store */
   int bs_sem;				/* semaphore mechanism ?	*/
-  int bs_private_heap; /* will be set to 1 if the backing store is used as a private heap */
+
+  int bs_isPriv;
+  int bs_refCount;
 } bs_map_t;
 
 typedef struct{
@@ -58,21 +63,42 @@ typedef struct{
   int fr_refcnt;			/* reference count		*/
   int fr_type;				/* FR_DIR, FR_TBL, FR_PAGE	*/
   int fr_dirty;
-  void *cookie;
-  unsigned long int fr_loadtime;
-  int next_frame;
+  void *cookie;				/* private data structure	*/
+  unsigned long int fr_loadtime;	/* when the page is loaded 	*/
+
+//  int next_frame;
+//  int prev_frame;
 }fr_map_t;
 
+typedef struct _FifoQueue{
+	int frameID;
+	struct _FifoQueue *nextFrame;
+}FifoQueue;
 
-typedef struct{
-  int frm_id;
-  int next_frame;
-}fifo_node;
+extern FifoQueue head_FIFO;
+extern int n_FIFOPages;
 
+extern int LRU_Count;
+extern int page_replace_policy;
 
 extern bs_map_t bsm_tab[];
 extern fr_map_t frm_tab[];
-extern fifo_node frame_fifo[];
+extern int globalPageTable[];
+
+SYSCALL init_bsm();
+SYSCALL init_frm();
+
+void insert_Frame_FIFO(int);
+int getFrame_FIFO();
+int getFrame_LRU();
+int LRU_updateTimeCount();
+SYSCALL get_bsm();
+
+SYSCALL free_bsm(int i);
+SYSCALL bsm_lookup(int pid, long vaddr, int* store, int* pageth);
+SYSCALL bsm_map(int pid, int vpno, int source, int npages);
+SYSCALL bsm_unmap(int pid, int vpno, int flag);
+
 
 /* Prototypes for required API calls */
 SYSCALL xmmap(int, bsd_t, int);
@@ -81,26 +107,25 @@ SYSCALL xunmap(int);
 /* given calls for dealing with backing store */
 
 int get_bs(bsd_t, unsigned int);
+int get_frm();
+
 SYSCALL release_bs(bsd_t);
 SYSCALL read_bs(char *, bsd_t, int);
 SYSCALL write_bs(char *, bsd_t, int);
 
-void insert_frm_fifo(int);
+int create_PageTable(int pid);
+int create_PageDirectory(int pid);
+int initializeGlobalPageTable();
+int write2CR3(int pid);
 
-int remove_frm_fifo();
 
-void evict_frame(int);
-
-int get_frm_LRU();
-
-void update_frms_LRU();
-
-void update_frm_fifo();
-
-void init_frame_fifo();
-
+#define NUM_BACKING_STORES			16		/*No. of backing stores */
+#define NPG			128		/*No. of pages per backing store */
 #define NBPG		4096	/* number of bytes per page	*/
 #define FRAME0		1024	/* zero-th frame		*/
+
+//default 3072 frames --> 1024+3072=4096=16M
+//#define NFRAMES 	3072	/* number of frames		*/
 #define NFRAMES 	1024	/* number of frames		*/
 
 #define BSM_UNMAPPED	0
@@ -109,18 +134,33 @@ void init_frame_fifo();
 #define FRM_UNMAPPED	0
 #define FRM_MAPPED	1
 
+#define UNMAPPED	0
+#define MAPPED 		1
+
+#define PRIVATE_HEAP		1
+#define CLEAN				0
+#define DIRTY				1
+
 #define FR_PAGE		0
 #define FR_TBL		1
 #define FR_DIR		2
 
-#define SC 3
-#define AGING 4
+#define FIFO		3
+#define GCM		4
+#define LRU		4
+
+#define MAX_ID          15
 
 #define BACKING_STORE_BASE	0x00800000
-#define BACKING_STORE_UNIT_SIZE 0x00100000
+#define BACKING_STORE_UNIT_SIZE 0x00080000
 
-#define NSTORES 8
+#define check_BS_ID(x)	(x<0 || x>=NUM_BACKING_STORES)
+#define check_PG_ID(x)	(x<0 || x>=NPG)
+#define check_FR_ID(x)	(x<0 || x>=NFRAMES)
 
-extern int fifo_head;
 
-unsigned long int timeCount;
+#define PD_OFFSET(vaddr)	(vaddr >> 22)
+#define PT_OFFSET(vaddr)	((vaddr >> 12) & 0x000003ff)
+#define PG_OFFSET(vaddr)	(vaddr & 0x00000fff)
+
+#endif

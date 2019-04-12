@@ -47,15 +47,6 @@
 #define	BOOT_MAGIC	0xB00DEF01
 #define	B_LEN			4
 
-#define MULTIBOOT_HEADER_MAGIC 0x1BADB002
-#define MULTIBOOT_HEADER_FLAGS 0x00000003
-
-        .align 4
-        .long MULTIBOOT_HEADER_MAGIC
-        .long MULTIBOOT_HEADER_FLAGS
-        .long -(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS)
-
-
 	.data
 	.globl	gdt
 	.globl	gdtr

@@ -21,6 +21,7 @@ SYSCALL resume(int pid)
 		return(SYSERR);
 	}
 	prio = pptr->pprio;
+//	kprintf("In Resume to ready & resume this process %d\n",pid);
 	ready(pid, RESCHYES);
 	restore(ps);
 	return(prio);

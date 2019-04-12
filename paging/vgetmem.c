@@ -11,36 +11,47 @@ extern struct pentry proctab[];
  * vgetmem  --  allocate virtual heap storage, returning lowest WORD address
  *------------------------------------------------------------------------
  */
-WORD	*vgetmem(nbytes)
-	unsigned nbytes;
-{
+WORD *vgetmem(unsigned int nbytes) {
+
+	/*
+	 * referred to getmem.c
+	 */
 	STATWORD ps;
-	struct mblock *p, *q, *leftover;
+	struct mblock *remain;
 
 	disable(ps);
-	if(nbytes == 0 || proctab[currpid].vmemlist->mnext == (struct mblock *) NULL){
-		restore(ps);
-		return( (WORD *)SYSERR);
-	}
 	nbytes = (unsigned int) roundmb(nbytes);
-	for(q= (proctab[currpid].vmemlist), p=(proctab[currpid].vmemlist)->mnext;
-		p != (struct mblock *)NULL;
-		q=p, p=p->mnext){
-			if(p->mlen == nbytes){
-				q->mnext = p->mnext;
-				restore(ps);
-				return( (WORD *)p);
-			}else if(p->mlen > nbytes){
-				leftover = (struct mblock *)( (unsigned)p + nbytes);
-				q->mnext = leftover;
-				leftover->mnext = p->mnext;
-				leftover->mlen = p->mlen - nbytes;
-				restore(ps);
-				return( (WORD *)p);
-			}
+
+	struct pentry *pptr = &proctab[currpid];
+	struct mblock *vmlist = &pptr->vmemlist;
+
+	if (vmlist->mnext == NULL || nbytes == 0) {
+		restore(ps);
+		return (WORD*) ( SYSERR);
+
+	}
+
+	struct mblock *prev = vmlist;
+	struct mblock *next = vmlist->mnext;
+
+	while (next != NULL) {
+		if (next->mlen > nbytes) {
+			remain = next + nbytes;
+			remain->mnext = next->mnext;
+			remain->mlen = next->mlen - nbytes;
+			prev->mnext = remain;
+			restore(ps);
+			return next;
+		} else if (next->mlen == nbytes) {
+			prev->mnext = next->mnext;
+			restore(ps);
+			return next;
 		}
+		prev = next;
+		next = next->mnext;
+	}
+
 	restore(ps);
-	return( (WORD *)SYSERR);
+	return (WORD*) ( SYSERR);
+
 }
-
-

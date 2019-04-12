@@ -10,16 +10,16 @@
 
 void dump32(unsigned long n) {
 
-  int i;
+	int i;
 
-  for(i = 31; i>=0; i--) {
-    kprintf("%02d ",i);
-  }
+	for (i = 31; i >= 0; i--) {
+		kprintf("%02d ", i);
+	}
 
-  kprintf("\n");
-  
-  for(i=31;i>=0;i--) 
-    kprintf("%d  ", (n&(1<<i)) >> i);
-    
-  kprintf("\n");
+	kprintf("\n");
+
+	for (i = 31; i >= 0; i--)
+		kprintf("%d  ", (n & (1 << i)) >> i);
+
+	kprintf("\n");
 }

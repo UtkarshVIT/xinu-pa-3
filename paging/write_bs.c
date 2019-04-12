@@ -5,14 +5,14 @@
 #include <bufpool.h>
 #include <paging.h>
 
-int write_bs(char *src, bsd_t bs_id, int page) {
+int write_bs(char *src, bsd_t store, int page) {
 
-  /* write one page of data from src
-     to the backing store bs_id, page
-     page.
-  */
-   char * phy_addr = BACKING_STORE_BASE + bs_id*BACKING_STORE_UNIT_SIZE + page*NBPG;
-   bcopy((void*)src, phy_addr, NBPG);
+	if (check_BS_ID(store) || check_PG_ID(page)) {
+		return SYSERR;
+	}
 
+	char * phy_addr = BACKING_STORE_BASE + (store << 19) + (page * NBPG);
+	bcopy((void*) src, phy_addr, NBPG);
+	return OK;
 }
 
