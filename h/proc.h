@@ -4,6 +4,7 @@
 #define _PROC_H_
 
 /* process table declarations and defined constants			*/
+#include "paging.h"
 
 #ifndef	NPROC				/* set the number of processes	*/
 #define	NPROC		30		/*  allowed if not already done	*/
@@ -43,6 +44,8 @@
 
 #define	isbadpid(x)	(x<=0 || x>=NPROC)
 
+#define NUM_BACKING_STORES			16		/*No. of backing stores */
+
 /* process table entry */
 
 struct	pentry	{
@@ -77,6 +80,7 @@ struct	pentry	{
         int     vhpno;                  /* starting pageno for vheap    */
         int     vhpnpages;              /* vheap size                   */
         struct mblock *vmemlist;        /* vheap list              	*/
+        bs_map_t backStoreMap[NUM_BACKING_STORES];		/* Backing Store Map		*/
 };
 
 
